@@ -158,6 +158,7 @@ TREE: dict[str, str] = {
     # domain module is the reason a rule cannot do this.
     "test_state.py": "adapters/browser",
     "test_config_agent_model.py": "adapters",
+    "test_config_league_id.py": "adapters",
     # -- interface --------------------------------------------------------------------------
     "test_cli_aste_backfill.py": "interface",
     "test_cli_aste_collect.py": "interface",

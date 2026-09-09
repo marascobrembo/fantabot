@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -26,6 +26,19 @@ class Settings(BaseSettings):
     # for legamiallerotaie. Runtime state is keyed by it because the account is
     # in two leghe and one flat file could not tell them apart. 0 means unset.
     fantabot_league_id: int = 0
+
+    @field_validator("fantabot_league_id", mode="before")
+    @classmethod
+    def _blank_league_id_is_unset(cls, value: object) -> object:
+        """`.env`'s own `FANTABOT_LEAGUE_ID=` (no value) reads as `""`, not "absent" —
+        pydantic-settings only falls back to the field default when the variable is
+        missing entirely, so an `int` field crashes `Settings()` on the exact line
+        `.env.example` ships. Every command imports `settings` at module load (the
+        Alembic env included), so this broke `alembic upgrade head` on a fresh clone
+        for anyone not yet managing a lega — precisely the harvest-only setup this
+        field has no bearing on. `""` means the same "unset" as an absent variable.
+        """
+        return 0 if value == "" else value
 
     # The driver must stay +psycopg2. SPEC assumption 3: fantabot is a batch
     # process, and `postgresql+asyncpg://` breaks `alembic upgrade head`.
