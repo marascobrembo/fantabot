@@ -80,9 +80,11 @@ def read_plan_inputs(
     from fantabot.adapters.persistence.repositories.reference import ReferenceRepository
 
     reference = ReferenceRepository(session)
-    # The clearing-price corpus is Mantra-only today: no Classic asta has been recorded, so a
-    # Classic run prices every player as no-history (same mean, a wider band) from fvm alone.
-    # When a Classic corpus exists, generalise this read on asta_type.
+    # The clearing-price corpus is Mantra-only today: no Classic asta has been recorded. A
+    # Classic run therefore has no observed sale for anyone, so the value model treats every
+    # player as no-history (same mean, a wider band) — but `build_plan_inputs` still backs the
+    # optimizer's cost with the listino `qa`, or budget planning would be meaningless. When a
+    # Classic corpus exists, generalise this read on asta_type.
     sales = (
         AsteRepository(session).mantra_clearing_sales(budget=num_credits, num_teams=num_teams)
         if listone == "mantra"

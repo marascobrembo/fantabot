@@ -104,6 +104,19 @@ def build_plan_inputs(
     else:
         pool = build_pool(roles)
         legality = build_legality(load_compat())
+    # `prices` is the observed mean clearing price, and today it is populated for Mantra only
+    # (`asta_planner.read_plan_inputs` — no Classic asta has ever been recorded). `priced_ids`
+    # has to stay tied to *that*: it feeds the value model's has-history-vs-no-history variance
+    # split, which is a claim about market confidence, not about credits.
+    #
+    # The optimizer's own floor for a player missing from `prices` is `DEFAULT_PRICE = 1`
+    # (`domain/asta/optimizer.py`) — a fine fallback for the handful of Mantra players the
+    # 68-room corpus never priced, and a broken one for Classic, where it is *every* player:
+    # the budget constraint stops meaning anything and a 500-credit plan spends 25. The
+    # platform's own listino quotation (`qa`) is a real credit-scale price that exists
+    # regardless of format, so it backs every player and an observed sale — strictly more
+    # informative — overrides it where one exists.
+    listino_prices = {pid: float(row.qa) for pid, row in quotazioni.items() if row.qa > 0}
     return PlanInputs(
         pool=pool,
         value=build_value(
@@ -113,7 +126,7 @@ def build_plan_inputs(
             as_of=as_of if sentiment else None,
             weights=SentimentWeights(k=tilt_k),
         ),
-        prices=prices,
+        prices={**listino_prices, **prices},
         teams={pid: row.squadra for pid, row in quotazioni.items()},
         names={pid: row.nome for pid, row in quotazioni.items()},
         roles=roles,

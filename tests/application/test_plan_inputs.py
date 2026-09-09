@@ -122,3 +122,27 @@ class TestTheClassicWorld:
         world = build_plan_inputs(rows, {}, None, as_of=None, tilt_k=1.0)
         assert all(isinstance(p, MantraPlayer) for p in world.pool)
         assert world.legality  # the 11 Mantra schemi are built for the default
+
+    def test_a_classic_player_prices_off_the_listino_not_the_1_credit_floor(self) -> None:
+        """No Classic asta has ever been recorded, so `prices` (the mean observed clearing
+        price) arrives empty for every Classic run. Before this, that meant every Classic
+        player fell through to the optimizer's own `DEFAULT_PRICE = 1` floor — a 500-credit
+        plan for 25 players spent 25 credits total, because nothing had a price to spend on.
+        The platform's own listino quotation (`qa`) backs every player instead, in the same
+        credit scale a real auction clears in."""
+        rows = {
+            "d1": QuotazioneRow(player_id="d1", nome="d1", squadra="X", ruoli_codice=("D",),
+                                 ruoli=("D",), fvm=20, qa=45),
+        }
+        world = build_plan_inputs(rows, {}, None, as_of=None, tilt_k=1.0, listone="classic")
+        assert world.prices["d1"] == 45.0
+
+    def test_an_observed_sale_still_wins_over_the_listino(self) -> None:
+        """A real clearing price is strictly more informative than the listino quotation, so
+        it must not be clobbered by the `qa` fallback."""
+        rows = {
+            "d1": QuotazioneRow(player_id="d1", nome="d1", squadra="X", ruoli_codice=("DC",),
+                                 ruoli=("Dc",), fvm=20, qa=45),
+        }
+        world = build_plan_inputs(rows, {"d1": 70.0}, None, as_of=None, tilt_k=1.0)
+        assert world.prices["d1"] == 70.0

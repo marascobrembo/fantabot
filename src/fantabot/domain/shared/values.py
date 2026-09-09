@@ -114,6 +114,11 @@ class QuotazioneRow:
     #: Fantavalore di mercato — the market's value estimate. Defaulted so older callers
     #: that build this row without it keep working.
     fvm: int = 0
+    #: Quotazione attuale — the platform's own current listino price, in the same credit
+    #: scale an auction clears in. Defaulted (0 = unknown) so older callers and golden
+    #: fixtures that build this row without it keep working; `plan_inputs.build_plan_inputs`
+    #: treats 0 as "no listino price" and does not use it as a price prior.
+    qa: int = 0
 
 
 @dataclass(frozen=True)

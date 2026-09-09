@@ -72,6 +72,7 @@ class ReferenceRepository(RepositoryBase):
                 Quotazione.ruoli_codice,
                 Quotazione.ruoli,
                 Quotazione.fvm,
+                Quotazione.qa,
             )
             .join(Player, Player.id == Quotazione.player_id)
             .where(Quotazione.stagione == stagione, Quotazione.listone == listone)
@@ -86,6 +87,7 @@ class ReferenceRepository(RepositoryBase):
                 ruoli_codice=tuple(row.ruoli_codice),
                 ruoli=tuple(row.ruoli),
                 fvm=int(row.fvm),
+                qa=int(row.qa),
             )
             for row in rows
         }
