@@ -31,6 +31,7 @@ EXPECTED: set[str] = {
     "asta legality",
     "asta live",
     "asta optimize",
+    "auth fantalab-import",
     "auth fantalab-login",
     "auth forget",
     "auth login",

@@ -14,11 +14,14 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from typer.testing import CliRunner
 
 from fantabot.application.fantalab_login import FantalabLoginResult, run
+from fantabot.interface.app import app
 from fantabot.interface.console import console
 
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
+runner = CliRunner()
 
 REFRESH = "refresh-CanaryValue777"
 STORAGE = {
@@ -153,3 +156,98 @@ def test_no_session_file_is_written(
     monkeypatch.chdir(tmp_path)
     _run(tmp_path, monkeypatch, _FakeContext(STORAGE))
     assert list(tmp_path.rglob("*.json")) == []
+
+
+def _stub_store_and_db(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
+    """Same stubbing `_run` does for `run`, reused for `fantalab-import` — no
+    browser factory this time, since the whole point is that one is never opened."""
+    import fantabot.application.fantalab_login as module
+
+    saved: list[Any] = []
+
+    class _Cipher:
+        fingerprint = "abcd1234"
+
+        def encrypt(self, plaintext: str) -> bytes:
+            return plaintext.encode()
+
+    class _Store:
+        def __init__(self, *_a: Any) -> None: ...
+
+        def save(self, captured: Any, **_k: Any) -> None:
+            saved.append(captured)
+
+    class _Session:
+        def __enter__(self) -> _Session:
+            return self
+
+        def __exit__(self, *_e: object) -> None: ...
+
+        def commit(self) -> None: ...
+
+    monkeypatch.setattr(module, "_preflight_key", lambda: _Cipher())
+    monkeypatch.setattr(module, "_preflight_database", lambda: None)
+    monkeypatch.setitem(
+        __import__("sys").modules, "fantabot.adapters.tokens.fantalab_store",
+        type("m", (), {"FantalabStore": _Store})(),
+    )
+    import fantabot.adapters.persistence as db_module
+
+    monkeypatch.setattr(db_module.database_manager, "get_session", lambda: _Session())
+    return saved
+
+
+def test_fantalab_import_stores_a_session_with_no_browser(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The command a headless host uses instead: a human captured the session by hand,
+    elsewhere, in an ordinary browser — this only has to store it."""
+    saved = _stub_store_and_db(monkeypatch)
+
+    result = runner.invoke(
+        app,
+        ["auth", "fantalab-import", "--user-id", "user-uuid"],
+        input="refresh-CanaryValue777\nid-CanaryValue777\naccess-CanaryValue777\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert len(saved) == 1
+    assert saved[0].user_id == "user-uuid"
+    assert saved[0].refresh_token == "refresh-CanaryValue777"
+    assert saved[0].id_token == "id-CanaryValue777"
+    assert saved[0].access_token == "access-CanaryValue777"
+
+
+def test_fantalab_import_hides_the_tokens_from_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cron captures stdout, and a terminal's scrollback outlives the session too."""
+    _stub_store_and_db(monkeypatch)
+
+    result = runner.invoke(
+        app,
+        ["auth", "fantalab-import", "--user-id", "user-uuid"],
+        input="refresh-CanaryValue777\nid-CanaryValue777\naccess-CanaryValue777\n",
+    )
+
+    output = ANSI.sub("", result.output)
+    assert "CanaryValue777" not in output
+    assert "user-uuid" in output, "the account id is not a secret and is worth reporting"
+
+
+def test_fantalab_import_accepts_blank_id_and_access_tokens(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A human who only copied `refresh_token` — the durable credential — is not stuck:
+    the app re-derives the other two on its next `/sign-in`."""
+    saved = _stub_store_and_db(monkeypatch)
+
+    result = runner.invoke(
+        app,
+        ["auth", "fantalab-import", "--user-id", "user-uuid"],
+        input="refresh-CanaryValue777\n\n\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert saved[0].id_token is None
+    assert saved[0].access_token is None

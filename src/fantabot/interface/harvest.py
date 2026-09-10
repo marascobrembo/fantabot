@@ -124,6 +124,48 @@ def fantalab_login(
         raise typer.Exit(exc.code) from None
 
 
+def fantalab_import(
+    user_id: str = typer.Option(
+        ..., "--user-id", help="The account's FantaLab uuid — localStorage's user_id. Not secret."
+    ),
+) -> None:
+    """Store a FantaLab session captured by hand elsewhere. For a host with no display
+    for `fantalab-login`'s headed browser.
+
+    Sign in normally, in your own everyday browser, on a machine that has one — nothing
+    about the sign-in changes, and nothing here scripts or automates it. Then open
+    DevTools -> Application -> Local Storage -> `https://app.fantalab.it` and copy
+    `refresh_token`, `id_token` and `access_token` when this prompts for them.
+
+    The three values are prompted for, never taken as options: an argv value sits in
+    `ps` and shell history for as long as the process does, the same reason
+    `FANTABOT_ENCRYPTION_KEY` is never passed that way either.
+    """
+    from fantabot.application.fantalab_login import LoginAborted, run_import
+
+    refresh_token = typer.prompt("refresh_token", hide_input=True)
+    id_token = typer.prompt(
+        "id_token (leave blank if you did not copy it)", default="", show_default=False,
+        hide_input=True,
+    )
+    access_token = typer.prompt(
+        "access_token (leave blank if you did not copy it)", default="", show_default=False,
+        hide_input=True,
+    )
+
+    try:
+        run_import(
+            user_id=user_id,
+            refresh_token=refresh_token,
+            id_token=id_token or None,
+            access_token=access_token or None,
+            report=console,
+        )
+    except LoginAborted as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(exc.code) from None
+
+
 def _report_dropped(dropped: DroppedEvents) -> None:
     """Say what did not become an event row.
 
@@ -571,6 +613,7 @@ HARVEST_COMMANDS: tuple[tuple[str, Callable[..., None]], ...] = (
 #: answered `No such command 'fantalab-login'`.
 AUTH_COMMANDS: tuple[tuple[str, Callable[..., None]], ...] = (
     ("fantalab-login", fantalab_login),
+    ("fantalab-import", fantalab_import),
 )
 
 

@@ -162,3 +162,47 @@ def run(
     report.print(f"\n[green]Session stored, encrypted, for {captured.user_id}[/green]")
     report.print("No storage_state.json was written.")
     return FantalabLoginResult(captured.user_id, browser_opened=True, stored=True)
+
+
+def run_import(
+    *,
+    user_id: str,
+    refresh_token: str,
+    id_token: str | None,
+    access_token: str | None,
+    now: datetime | None = None,
+    report: Reporter,
+) -> FantalabLoginResult:
+    """Store a session a human captured by hand somewhere this process cannot open a
+    browser — a headless host with no display for `run`'s headed window.
+
+    The sign-in itself still happens exactly as `run` requires: ordinarily, in the
+    human's own everyday browser, with nothing scripted. What changes is only where the
+    three `localStorage` values end up read from — DevTools on that machine instead of
+    `ctx.storage_state()` here — and this function never sees a browser at all. The
+    values still go straight into Fernet with no plaintext stop on this side either,
+    and the interface prompts for them rather than taking them as options, for the same
+    reason `FANTABOT_ENCRYPTION_KEY` is never passed on argv.
+    """
+    from fantabot.adapters.persistence import database_manager
+    from fantabot.adapters.tokens.fantalab_store import FantalabStore
+
+    moment = now or datetime.now(UTC)
+
+    cipher = _preflight_key()
+    report.print(f"Encryption key: [green]ok[/green] (fingerprint {cipher.fingerprint})")
+    _preflight_database()
+    report.print("Database:       [green]ok[/green]")
+
+    captured = FantalabSession(
+        user_id=user_id,
+        refresh_token=refresh_token,
+        id_token=id_token or None,
+        access_token=access_token or None,
+    )
+    with database_manager.get_session() as session:
+        FantalabStore(session, cipher).save(captured, now=moment)
+        session.commit()
+
+    report.print(f"\n[green]Session stored, encrypted, for {captured.user_id}[/green]")
+    return FantalabLoginResult(captured.user_id, browser_opened=False, stored=True)
